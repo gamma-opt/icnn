@@ -49,7 +49,7 @@ box = Box(2, lb, ub)
 #-----------------------------level 0 root------------------------------------------#
 
 # without BB method, directly optimise the ICNN model with additional constraints and custom objective (no penalty term)
-
+# max x[1]+z s.t. z >= 0.5
 root_icnn_lp = copy(icnn_lp)
 set_optimizer(root_icnn_lp, alpine_optimiser)
 
@@ -70,8 +70,8 @@ print(root_icnn_lp)
 results = solve_node_models([root_icnn_lp], icnn_lp)
 obj_lb, x_optimal, boxes_to_branch, all_pruned = process_results(results, [box], obj_lb, x_optimal)
 
-#--------then start branching using B&b, max x[1]+z s.t. z >= 0.5-----------#
-#-----------------------------level 1---------------------------------------#
+#-------------------------then start branching using B&B--------------------------#
+#-----------------------------------level 1---------------------------------------#
 
 # Branch the box on the first dimension (x[1]) to create two new boxes
 boxes_list = branch_box(box, branch_dimension=1)
