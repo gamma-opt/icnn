@@ -36,7 +36,7 @@ function solve_node_models(model_list, icnn_lp; gap_tol = 0.01)
             end
             is_pruned = false  # Default pruning status, can be updated later
                         
-            # Store all data needed for plotting
+            # Store all data needed
             push!(results, NodeOptResult(
                 i,
                 termination_status(model),
