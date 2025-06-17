@@ -40,7 +40,7 @@ print(icnn_lp)  # min output_var z
 #-----------------------------Branch and Bound setup--------------------------------#
 
 obj_lb = -Inf # updated upwards by feasible solutions (z_optimal gap within tolerance)
-x_values = nothing # updated with the x values of the best solution found so far
+x_optimal = nothing # updated with the x values of the best solution found so far
 
 lb = [-1.0, -1.0]
 ub = [1.0, 1.0]
@@ -51,7 +51,7 @@ box = Box(2, lb, ub)
 # without BB method, directly optimise the ICNN model with additional constraints and custom objective (no penalty term)
 
 root_icnn_lp = copy(icnn_lp)
-set_optimizer(root_icnn_lp, alpine_optimizer)
+set_optimizer(root_icnn_lp, alpine_optimiser)
 
 # define the constraints on input variable
 for i in 1:box.n
@@ -68,7 +68,7 @@ end
 print(root_icnn_lp)
 
 results = solve_node_models([root_icnn_lp], icnn_lp)
-obj_lb, x_values, boxes_to_branch, all_pruned = process_results(results, [box], obj_lb, x_values)
+obj_lb, x_optimal, boxes_to_branch, all_pruned = process_results(results, [box], obj_lb, x_optimal)
 
 #--------then start branching using B&b, max x[1]+z s.t. z >= 0.5-----------#
 #-----------------------------level 1---------------------------------------#
@@ -79,4 +79,4 @@ boxes_list = branch_box(box, branch_dimension=1)
 new_icnn_lp_list = generate_relaxation(icnn_lp, root_icnn_lp, boxes_list)
 results = solve_node_models(new_icnn_lp_list, icnn_lp)
 
-obj_lb, x_values, boxes_to_branch, all_pruned = process_results(results, boxes_list, obj_lb, x_values)
+obj_lb, x_optimal, boxes_to_branch, all_pruned = process_results(results, boxes_list, obj_lb, x_optimal)
