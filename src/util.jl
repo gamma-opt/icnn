@@ -23,7 +23,7 @@ end
 
 function forwardpass(jump_model, input_values)
     # Fix each element individually
-    for i in 1:2
+    for i in eachindex(input_values)
         fix(jump_model[:x][i], input_values[i]; force = true)
     end
     optimize!(jump_model)
@@ -31,7 +31,7 @@ function forwardpass(jump_model, input_values)
     result = value.(jump_model[:z])
     
     # Unfix each element individually
-    for i in 1:2
+    for i in eachindex(input_values)
         unfix(jump_model[:x][i])
     end
 
