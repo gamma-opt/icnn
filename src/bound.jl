@@ -1,11 +1,11 @@
 mutable struct NodeOptResult
     model_index::Int
-    model_status
-    obj_optimal
-    x_optimal
-    z_optimal
-    icnn_z_optimal
-    gap
+    model_status::MOI.TerminationStatusCode
+    obj_optimal::Float64
+    x_optimal::Union{Vector{Float64}, Nothing}
+    z_optimal::Float64
+    icnn_z_optimal::Float64
+    gap::Float64
     is_feasible::Bool
     is_pruned::Bool
 end
