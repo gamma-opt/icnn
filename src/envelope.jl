@@ -8,7 +8,7 @@ function _add_envelope_constraints(icnn_lp, new_icnn_lp, box)
 
     # define the icnn model
     new_icnn_lp = copy(new_icnn_lp)
-    set_optimizer(new_icnn_lp, alpine_optimizer)
+    set_optimizer(new_icnn_lp, alpine_optimiser)
 
     # define the output variable
     new_icnn_output_var = new_icnn_lp[:z]
