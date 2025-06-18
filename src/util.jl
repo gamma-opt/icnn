@@ -37,3 +37,25 @@ function forwardpass(jump_model, input_values)
 
     return result
 end
+
+function branch_and_bound(icnn_lp, root_icnn_lp, tree_status::TreeStatus)
+    # Start with the root node
+    new_icnn_lp_list = [root_icnn_lp]
+    
+    # Process the tree status to branch on boxes
+    while !isempty(tree_status.bounds_to_branch) && !tree_status.all_pruned
+        # Branch on the next box
+        tree_status.bounds_to_branch = branch_box(tree_status.bounds_to_branch)
+        
+        # Generate new relaxation models for each branched box
+        new_icnn_lp_list = generate_relaxation(icnn_lp, root_icnn_lp, tree_status)
+        
+        # Solve the new models
+        results = solve_node_models(new_icnn_lp_list, icnn_lp)
+        
+        # Process the results and update the tree status
+        tree_status = process_results(results, tree_status)
+    end
+    
+    return tree_status.x_optimal, tree_status.obj_lb
+end
