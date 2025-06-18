@@ -1,13 +1,29 @@
+using JuMP
+
 mutable struct NodeOptResult
     model_index::Int
     model_status::MOI.TerminationStatusCode
     obj_optimal::Float64
     x_optimal::Union{Vector{Float64}, Nothing}
     z_optimal::Float64
+    a_values::Union{Vector{Float64}, Nothing}  # Optional, can be removed if not needed
     icnn_z_optimal::Float64
     gap::Float64
     is_feasible::Bool
     is_pruned::Bool
+end
+
+mutable struct Box
+    n::Int
+    lb::Vector
+    ub::Vector
+end
+
+mutable struct TreeStatus
+    obj_lb::Float64
+    x_optimal::Union{Vector{Float64}, Nothing}
+    bounds_to_branch::Vector{Tuple{Box, Int}}  # (box, dimension) pairs
+    all_pruned::Bool
 end
 
 function solve_node_models(model_list, icnn_lp; gap_tol = 0.01)
@@ -26,7 +42,13 @@ function solve_node_models(model_list, icnn_lp; gap_tol = 0.01)
             obj_optimal = objective_value(model)
             x_optimal = value.(model[:x])
             z_optimal = value(model[:z])
-            # a_values = value.(model[:a])
+            if haskey(model, :a)
+                # If 'a' is present, extract its values
+                a_values = value.(model[:a])
+            else
+                # If 'a' is not present, set it to nothing or an empty vector
+                a_values = nothing
+            end
             icnn_z_optimal = forwardpass(icnn_lp, x_optimal)
             gap = abs(z_optimal - icnn_z_optimal)/abs(icnn_z_optimal) 
             is_feasible = true
@@ -43,7 +65,7 @@ function solve_node_models(model_list, icnn_lp; gap_tol = 0.01)
                 obj_optimal,
                 x_optimal,
                 z_optimal,
-                # a_values,
+                a_values,
                 icnn_z_optimal,
                 gap,
                 is_feasible,
@@ -63,16 +85,16 @@ function solve_node_models(model_list, icnn_lp; gap_tol = 0.01)
             push!(results, NodeOptResult(
                 i,
                 termination_status(model),
+                NaN,
                 nothing,
+                NaN,
                 nothing,
-                nothing,
-                # nothing,
-                nothing,
-                nothing,
-                nothing,
+                NaN,
+                NaN,
+                false,
                 true  # prune by infeasibility
             ))
-            println("Optimisation did not reach optimality.")
+            println("Optimisation did not reach optimality")
         end
     end
 
@@ -80,15 +102,18 @@ function solve_node_models(model_list, icnn_lp; gap_tol = 0.01)
     
 end
 
+function process_results(results::Vector{Any}, tree_status::TreeStatus)   
+    box_tuples = tree_status.bounds_to_branch
+    obj_lb = tree_status.obj_lb
+    x_optimal = tree_status.x_optimal
 
-function process_results(results, box_list, obj_lb, x_values)
-    bounds_to_branch = Box[]
+    bounds_to_branch = Tuple{Box, Int}[]
     
     # Process each result
     for i in eachindex(results)
         result = results[i]
-        current_box = box_list[i] 
-        println("\nProcessing result for model $(result.model_index) with box: ", current_box)
+        current_box, current_dimension = box_tuples[i] 
+        println("\nProcessing result for model $(result.model_index) with box: $current_box, dimension: $current_dimension")
         
         # Only process if not already pruned
         if !result.is_pruned    
@@ -96,18 +121,21 @@ function process_results(results, box_list, obj_lb, x_values)
                 result.is_pruned = true # prune by optimality
                 if result.obj_optimal > obj_lb
                     obj_lb = max(result.obj_optimal, obj_lb)
-                    println("Updated lower bound: ", obj_lb)
-                    x_values = result.x_optimal # store current best solution
+                    println("...Updated lower bound: ", obj_lb)
+                    x_optimal = result.x_optimal # store current best solution
                 end
             else
                 if result.obj_optimal < obj_lb
                     result.is_pruned = true  # prune by bound as ub < lb
-                    println("Current branch is pruned by bound")
+                    println("...Current branch is pruned by bound")
                 else
-                    push!(bounds_to_branch, current_box)
-                    println("Further branching on $current_box is required")
+                    push!(bounds_to_branch, (current_box, current_dimension))
+                    println("...Further branching on box $current_box with dimension $current_dimension is required")
+                
                 end
             end
+        else
+            println("...Current branch on box $current_box with dimension $current_dimension is pruned by infeasibility")
         end
     end
     
@@ -116,14 +144,19 @@ function process_results(results, box_list, obj_lb, x_values)
     
     if all_pruned
         println("\nAll nodes are pruned, no further branching needed")
-        if !isnothing(x_values)
-            println("      x values: ", x_values)
+        if !isnothing(x_optimal)
+            println("      x values: ", x_optimal)
             println("solution value: ", obj_lb)
         end
     else
-        println("\nFurther branching on $bounds_to_branch is required")
-        println("Current lower bound: ", obj_lb)
+        # println("\nFurther branching on $bounds_to_branch is required")
+        println("\nCurrent lower bound: ", obj_lb)
     end
+
+    tree_status.obj_lb = obj_lb
+    tree_status.x_optimal = x_optimal
+    tree_status.bounds_to_branch = bounds_to_branch
+    tree_status.all_pruned = all_pruned
     
-    return obj_lb, x_values, bounds_to_branch, all_pruned
+    return tree_status
 end
