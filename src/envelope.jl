@@ -48,10 +48,10 @@ function _add_envelope_constraints(icnn_lp, new_icnn_lp, box)
     print(new_icnn_lp)
 
     return new_icnn_lp
-
 end
 
-function generate_relaxation(icnn_lp, root_icnn_lp, boxes_list)
+function generate_relaxation(icnn_lp, root_icnn_lp, tree_status::TreeStatus)
+    boxes_list = [box for (box, _) in tree_status.bounds_to_branch]
     new_icnn_lp_list = Array{JuMP.Model}(undef, length(boxes_list))
 
     for i in eachindex(boxes_list)
