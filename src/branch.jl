@@ -1,8 +1,3 @@
-mutable struct Box
-    n::Int
-    lb::Vector
-    ub::Vector
-end
 
 function generate_bounds_matrix(box::Box; mid_dimension=nothing, bound_type=:lower)
 
@@ -46,16 +41,24 @@ function _bounds_matrix_to_box(bounds_matrix)
     return Box(dimensions, lb, ub)
 end
 
-function branch_box(box; branch_dimension)
-    # Generate bounds matrix with upper bound set to midpoint
-    bounds_mid_upper = generate_bounds_matrix(box, mid_dimension=branch_dimension, bound_type=:upper)
+function branch_box(box_tuples::Vector{Tuple{Box, Int}})
+    all_branched_boxes = Tuple{Box, Int}[]
     
-    # Generate bounds matrix with lower bound set to midpoint  
-    bounds_mid_lower = generate_bounds_matrix(box, mid_dimension=branch_dimension, bound_type=:lower)
+    for (box, branch_dimension) in box_tuples
+        # Generate bounds matrix with upper bound set to midpoint
+        bounds_mid_upper = generate_bounds_matrix(box, mid_dimension=branch_dimension, bound_type=:upper)
+        
+        # Generate bounds matrix with lower bound set to midpoint  
+        bounds_mid_lower = generate_bounds_matrix(box, mid_dimension=branch_dimension, bound_type=:lower)
+        
+        # Convert both bounds matrices to Box objects
+        box_upper = _bounds_matrix_to_box(bounds_mid_upper)
+        box_lower = _bounds_matrix_to_box(bounds_mid_lower)
+        
+        # Add both branched boxes with the same dimension (or you could increment/change logic)
+        push!(all_branched_boxes, (box_upper, branch_dimension))
+        push!(all_branched_boxes, (box_lower, branch_dimension))
+    end
     
-    # Convert both bounds matrices to Box objects
-    box_upper = _bounds_matrix_to_box(bounds_mid_upper)
-    box_lower = _bounds_matrix_to_box(bounds_mid_lower)
-    
-    return [box_upper, box_lower]
+    return all_branched_boxes
 end
