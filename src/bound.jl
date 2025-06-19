@@ -129,6 +129,9 @@ function process_results(results::Vector{Any}, tree_status::TreeStatus)
                     result.is_pruned = true  # prune by bound as ub < lb
                     println("...Current branch is pruned by bound")
                 else
+                    # TODO variable slection
+                    #      - current_dimension could be changed based on some logic
+                    #      - for nodes stemmed from the same box, they should be branched on the same dimension 
                     push!(bounds_to_branch, (current_box, current_dimension))
                     println("...Further branching on box $current_box with dimension $current_dimension is required")
                 
@@ -142,14 +145,19 @@ function process_results(results::Vector{Any}, tree_status::TreeStatus)
     # Check if all models are pruned
     all_pruned = all(r -> r.is_pruned, results)
     
+    println("\nSummary:")
     if all_pruned
         println("\nAll nodes are pruned, no further branching needed")
         if !isnothing(x_optimal)
+            println("\nOptimal solution found:")
             println("      x values: ", x_optimal)
             println("solution value: ", obj_lb)
+        else
+            println("\nNo feasible solution found")
+            println("lower bound remains: ", obj_lb)
         end
     else
-        # println("\nFurther branching on $bounds_to_branch is required")
+        println("\nFurther branching on $bounds_to_branch is required")
         println("\nCurrent lower bound: ", obj_lb)
     end
 
