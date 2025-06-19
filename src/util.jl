@@ -43,7 +43,7 @@ function branch_and_bound(icnn_lp, root_icnn_lp, tree_status::TreeStatus)
     new_icnn_lp_list = [root_icnn_lp]
     
     # Process the tree status to branch on boxes
-    while !isempty(tree_status.bounds_to_branch) && !tree_status.all_pruned
+    while !tree_status.all_pruned
         # Branch on the next box
         tree_status.bounds_to_branch = branch_box(tree_status.bounds_to_branch)
         
