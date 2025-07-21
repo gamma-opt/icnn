@@ -1,6 +1,6 @@
-using JuMP
-using Gurobi
 using Gogeta
+using Gurobi
+using JuMP
 
 include("../../src/icnn.jl")
 
@@ -11,22 +11,19 @@ function generate_data(num_samples=1000)
     return x, y
 end
 
-# Example usage with custom configuration
-println("=== Custom ICNN Example ===")
-
 # Create custom configuration
 custom_config = ICNNConfig(
     2,                      # input_dim
-    [64, 64],               # hidden_dims - 2 hidden layers
+    [64, 64],               # hidden_dims
     1,                      # output_dim
-    "relu",                 # activation
+    relu,                   # activation
     true,                   # use_skip_connections
-    0.001f0,               # learning_rate
-    64,                     # batch_size - larger batch
-    150,                    # max_epochs - more epochs
-    15,                     # patience - more patience
-    0.1f0,                 # dropout_rate - add some regularization
-    "kaiming_uniform",      # weight_init
+    0.001f0,                # learning_rate
+    64,                     # batch_size
+    150,                    # max_epochs
+    15,                     # patience
+    0.1f0,                  # dropout_rate - add some regularisation
+    Flux.kaiming_uniform,   # weight_init
     123                     # seed
 )
 
@@ -37,7 +34,6 @@ x_val, y_val = generate_data(400)
 println("Data shapes:")
 println("  Training: ", size(x_train), " -> ", size(y_train))
 println("  Validation: ", size(x_val), " -> ", size(y_val))
-println()
 
 # Create and train model
 model = ICNN(custom_config)
@@ -49,7 +45,7 @@ x_test = Float32[0.5 -0.3 0.8; -0.5 0.7 -0.2]  # 3 test samples
 y_pred = model(x_test; training=false)
 y_expected = sum(x_test.^2, dims=1)
 
-for i in 1:size(x_test, 2)
+for i in axes(x_test,2)
     pred = y_pred[1, i]
     expected = y_expected[1, i]
     error = abs(pred - expected)
