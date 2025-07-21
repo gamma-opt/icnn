@@ -3,44 +3,22 @@ using Random
 using Statistics
 using LinearAlgebra
 using JSON
-using StructTypes
 
 # Configuration structure for ICNN
 struct ICNNConfig
     input_dim::Int
     hidden_dims::Vector{Int}
     output_dim::Int
-    activation::String
+    activation::Function
     use_skip_connections::Bool
     learning_rate::Float32
     batch_size::Int
     max_epochs::Int
     patience::Int
     dropout_rate::Float32
-    weight_init::String
+    weight_init::Function
     seed::Union{Int, Nothing}
 end
-
-# Default configuration
-function default_config()
-    return ICNNConfig(
-        2,                          # input_dim
-        [64, 64, 32],              # hidden_dims
-        1,                          # output_dim
-        "relu",                     # activation
-        true,                       # use_skip_connections
-        0.001f0,                    # learning_rate
-        32,                         # batch_size
-        100,                        # max_epochs
-        10,                         # patience
-        0.0f0,                      # dropout_rate
-        "glorot_uniform",           # weight_init
-        42                          # seed
-    )
-end
-
-# Make ICNNConfig JSON serializable
-StructTypes.StructType(::Type{ICNNConfig}) = StructTypes.Struct()
 
 # Flexible ICNN Model
 struct ICNN
@@ -50,31 +28,6 @@ struct ICNN
     dropout_layers::Vector{Union{Flux.Dropout, Nothing}}
 end
 
-# Activation function mapping
-function get_activation(name::String)
-    activations = Dict(
-        "relu" => relu,
-        "tanh" => tanh,
-        "sigmoid" => sigmoid,
-        "swish" => swish,
-        "gelu" => gelu
-    )
-    return get(activations, name, relu)
-end
-
-# Weight initialization mapping
-function get_init(name::String)
-    inits = Dict(
-        "glorot_uniform" => Flux.glorot_uniform,
-        "glorot_normal" => Flux.glorot_normal,
-        "xavier_uniform" => Flux.glorot_uniform,
-        "xavier_normal" => Flux.glorot_normal,
-        "kaiming_uniform" => Flux.kaiming_uniform,
-        "kaiming_normal" => Flux.kaiming_normal
-    )
-    return get(inits, name, Flux.glorot_uniform)
-end
-
 # Constructor for ICNN
 function ICNN(config::ICNNConfig)
     # Set random seed if provided
@@ -82,8 +35,8 @@ function ICNN(config::ICNNConfig)
         Random.seed!(config.seed)
     end
     
-    activation = get_activation(config.activation)
-    init_fn = get_init(config.weight_init)
+    activation = config.activation
+    init_fn = config.weight_init
     
     layers = Dense[]
     skip_layers = Union{Dense, Nothing}[]
@@ -142,7 +95,7 @@ end
 
 # Forward pass
 function (model::ICNN)(x; training=false)
-    activation = get_activation(model.config.activation)
+    activation = model.config.activation
     current = x
     
     # First layer (input -> first hidden)
@@ -200,8 +153,8 @@ function train_icnn(model::ICNN, x_train, y_train, x_val, y_val; verbose=true)
     # Loss function
     loss_fn(x, y) = Flux.mse(model(x; training=true), y)
     
-    # Optimizer
-    optimizer = Flux.Adam(config.learning_rate)
+    # Optimiser
+    optimiser = Flux.Adam(config.learning_rate)
     params = Flux.params(model)
     
     # Early stopping variables
@@ -248,7 +201,7 @@ function train_icnn(model::ICNN, x_train, y_train, x_val, y_val; verbose=true)
                 return loss_val
             end
             
-            Flux.update!(optimizer, params, grads)
+            Flux.update!(optimiser, params, grads)
             project_convex_weights!(model)
             
             push!(epoch_losses, loss_val)
@@ -267,7 +220,7 @@ function train_icnn(model::ICNN, x_train, y_train, x_val, y_val; verbose=true)
             epochs_without_improvement = 0
             best_model_state = deepcopy(model)
             if verbose
-                println("Epoch $epoch, Train: $(round(avg_train_loss, digits=6)), Val: $(round(val_loss, digits=6)) ★")
+                println("Epoch $epoch, Train: $(round(avg_train_loss, digits=6)), Val: $(round(val_loss, digits=6)) (best)")
             end
         else
             epochs_without_improvement += 1
@@ -295,69 +248,40 @@ function train_icnn(model::ICNN, x_train, y_train, x_val, y_val; verbose=true)
     return Dict("train_losses" => train_losses, "val_losses" => val_losses, "best_val_loss" => best_val_loss)
 end
 
-# Extract weights in Python-style with named layers
+# Extract weights in Gogeta-style with named layers
 # Weights: W[layer name][1][column num][row]
 # Biases: W[layer name][2][bias index]
 # names SKIP-2,3,...,k (skip connection)
 #       FC-1,2,...,k (fully connected)
 #       (k is output layer index)
 function save_model(model::ICNN, json_file_path::String)
-    weights_json_structure = Dict{String, Any}()
+    weights_json = Dict{String, Any}()
 
-    # --- Main Layers (FC-1, FC-2, ..., FC-k) ---
-    # The number of main layers is length(model.layers)
-    # The last main layer corresponds to the output layer.
-
-    for i in 1:length(model.layers)
-        layer = model.layers[i]
-
+    for (i, layer) in enumerate(model.layers)
         # Determine the name of the main layer
-        layer_name = if i == 1
-            "FC1" # First main layer
-        elseif i == length(model.layers) # Last main layer (output layer)
-            "FC$(length(model.config.hidden_dims) + 1)" # k is output layer index
-        else # Hidden layers
-            "FC$(i)"
-        end
+        layer_name = "FC$i"
 
-        julia_weight_matrix = collect(layer.weight) # This is output_dim x input_dim
-        transposed_weights = permutedims(julia_weight_matrix) # This is input_dim x output_dim
-
-        weights_list_of_lists = [transposed_weights[r, :] for r in 1:size(transposed_weights, 1)]
-
-        # Biases are straightforward: collect to a 1D array
+        transposed_weights = permutedims(collect(layer.weight)) # input_dim x output_dim
+        weights_list = [transposed_weights[r, :] for r in axes(transposed_weights, 1)]
         biases_list = collect(layer.bias)
 
-        # Store in the required format: [weights_matrix_list, biases_list]
-        weights_json_structure[layer_name] = Any[weights_list_of_lists, biases_list]
+        weights_json[layer_name] = Any[weights_list, biases_list]
     end
 
-    for i in 2:length(model.skip_layers) # Start from 2 because model.skip_layers[1] is nothing
-        skip_layer = model.skip_layers[i]
+    for (i, skip_layer) in enumerate(model.skip_layers)
+        if skip_layer !== nothing
+            skip_name = "SKIP$i"
 
-        if skip_layer !== nothing # Only process if the skip layer exists
-            skip_name = if i == length(model.skip_layers)
-                # This is the skip connection to the output layer
-                "SKIP$(length(model.config.hidden_dims) + 1)" # k is output layer index
-            else
-                # This is a skip connection to a hidden layer, e.g., hidden_dims[i-1] -> hidden_dims[i]
-                # It corresponds to the i-th hidden dimension in the config.
-                "SKIP$(i)"
-            end
+            transposed_weights = permutedims(collect(skip_layer.weight)) # input_dim x output_dim
+            weights_list = [transposed_weights[r, :] for r in axes(transposed_weights, 1)]
 
-            julia_weight_matrix = collect(skip_layer.weight) # This is output_dim x input_dim
-            transposed_weights = permutedims(julia_weight_matrix) # This is input_dim x output_dim
-            weights_list_of_lists = [transposed_weights[r, :] for r in 1:size(transposed_weights, 1)]
-
-            biases_list = collect(skip_layer.bias) # Skip layers also have biases (bias=false still initializes it to zeros)
-
-            weights_json_structure[skip_name] = Any[weights_list_of_lists, biases_list]
+            weights_json[skip_name] = Any[weights_list]
         end
     end
 
     # Save the weights to a JSON file
     open(json_file_path, "w") do io
-        write(io, JSON.json(weights_json_structure, 4)) # indent for pretty printing
+        write(io, JSON.json(weights_json, 4))
     end
 end
 
@@ -372,7 +296,7 @@ function print_model_summary(model::ICNN)
     for (i, layer) in enumerate(model.layers)
         layer_name = "FC$i"
         weight_shape = size(layer.weight)
-        bias_params = layer.bias === false ? 0 : length(layer.bias)
+        bias_params = layer.bias == false ? 0 : length(layer.bias)
         layer_params = prod(weight_shape) + bias_params
         total_params += layer_params
         
@@ -384,7 +308,7 @@ function print_model_summary(model::ICNN)
         if skip_layer !== nothing
             layer_name = "SKIP$i"
             weight_shape = size(skip_layer.weight)
-            bias_params = skip_layer.bias === false ? 0 : length(skip_layer.bias)
+            bias_params = skip_layer.bias == false ? 0 : length(skip_layer.bias)
             layer_params = prod(weight_shape) + bias_params
             total_params += layer_params
             
