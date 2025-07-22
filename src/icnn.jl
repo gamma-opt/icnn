@@ -60,6 +60,7 @@ function ICNN(config::ICNNConfig)
         curr_dim = config.hidden_dims[i]
         
         # Main layer (weights will be projected to non-negative)
+        # Activation is applied manually in the forward pass function
         push!(layers, Dense(prev_dim => curr_dim; init=init_fn))
         
         # Skip connection from input
@@ -134,9 +135,6 @@ function (model::ICNN)(x; training=false)
     
     return output
 end
-
-# Make ICNN work with Flux
-Flux.@functor ICNN
 
 # Project weights to maintain convexity (non-negative weights for hidden layers)
 function project_convex_weights!(model::ICNN)
@@ -260,21 +258,15 @@ function save_model(model::ICNN, json_file_path::String)
     for (i, layer) in enumerate(model.layers)
         # Determine the name of the main layer
         layer_name = "FC$i"
-
-        transposed_weights = permutedims(collect(layer.weight)) # input_dim x output_dim
-        weights_list = [transposed_weights[r, :] for r in axes(transposed_weights, 1)]
-        biases_list = collect(layer.bias)
-
+        weights_list = [layer.weight[:, r] for r in axes(layer.weight, 2)]
+        biases_list = layer.bias
         weights_json[layer_name] = Any[weights_list, biases_list]
     end
 
     for (i, skip_layer) in enumerate(model.skip_layers)
         if skip_layer !== nothing
             skip_name = "SKIP$i"
-
-            transposed_weights = permutedims(collect(skip_layer.weight)) # input_dim x output_dim
-            weights_list = [transposed_weights[r, :] for r in axes(transposed_weights, 1)]
-
+            weights_list = [skip_layer.weight[:, r] for r in axes(skip_layer.weight, 2)]
             weights_json[skip_name] = Any[weights_list]
         end
     end
