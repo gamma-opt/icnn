@@ -80,7 +80,7 @@ function solve_node_models(model_list, icnn_lp; gap_tol = 0.01)
             # for j in eachindex(a_values)
                 # println("  a[$j] = ", a_values[j])
             # end
-            println("           Gap: ", gap)
+            println("            Gap: ", gap)
         else
             push!(results, NodeOptResult(
                 i,
@@ -161,6 +161,7 @@ function process_results(results::Vector{Any}, tree_status::TreeStatus)
     else
         println("\nFurther branching on $bounds_to_branch is required")
         println("\nCurrent lower bound: ", obj_lb)
+        println()
     end
 
     tree_status.obj_lb = obj_lb
