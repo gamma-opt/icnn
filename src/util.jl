@@ -26,6 +26,7 @@ function forwardpass(jump_model, input_values)
     for i in eachindex(input_values)
         fix(jump_model[:x][i], input_values[i]; force = true)
     end
+    set_silent(jump_model)
     optimize!(jump_model)
 
     result = value.(jump_model[:z])
@@ -41,9 +42,11 @@ end
 function branch_and_bound(icnn_lp, root_icnn_lp, tree_status::TreeStatus)
     # Start with the root node
     new_icnn_lp_list = [root_icnn_lp]
-    
+    iteration = 0
+    start_time = time()
     # Process the tree status to branch on boxes
     while !tree_status.all_pruned
+        iteration += 1
         # Branch on the next box
         tree_status.bounds_to_branch = branch_box(tree_status.bounds_to_branch)
         
@@ -57,5 +60,5 @@ function branch_and_bound(icnn_lp, root_icnn_lp, tree_status::TreeStatus)
         tree_status = process_results(results, tree_status)
     end
     
-    return tree_status.x_optimal, tree_status.obj_lb
+    println("\nTerminated at iteration #$iteration in $(round(time() - start_time, digits=4)) seconds")
 end
