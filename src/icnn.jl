@@ -11,6 +11,7 @@ struct ICNNConfig
     output_dim::Int
     activation::Function
     use_skip_connections::Bool
+    use_convex_projection::Bool
     learning_rate::Float32
     batch_size::Int
     max_epochs::Int
@@ -172,6 +173,7 @@ function train_icnn(model::ICNN, x_train, y_train, x_val, y_val; verbose=true)
         println("  Architecture: $(config.input_dim) -> $(join(config.hidden_dims, " -> ")) -> $(config.output_dim)")
         println("  Activation: $(config.activation)")
         println("  Skip connections: $(config.use_skip_connections)")
+        println("  Convex projection: $(config.use_convex_projection)")
         println("  Learning rate: $(config.learning_rate)")
         println("  Batch size: $(config.batch_size)")
         println("  Max epochs: $(config.max_epochs)")
@@ -200,7 +202,9 @@ function train_icnn(model::ICNN, x_train, y_train, x_val, y_val; verbose=true)
             end
             
             Flux.update!(optimiser, params, grads)
-            project_convex_weights!(model)
+            if config.use_convex_projection
+                project_convex_weights!(model)
+            end
             
             push!(epoch_losses, loss_val)
         end
@@ -310,5 +314,5 @@ function print_model_summary(model::ICNN)
     
     println("=" ^ 50)
     println("Total parameters: $total_params")
-    println("Configuration: $(model.config.activation) activation, skip_connections=$(model.config.use_skip_connections)")
+    println("Configuration: $(model.config.activation) activation, skip_connections=$(model.config.use_skip_connections), convex_projection=$(model.config.use_convex_projection)")
 end
