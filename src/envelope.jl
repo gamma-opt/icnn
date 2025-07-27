@@ -8,7 +8,8 @@ function _add_envelope_constraints(icnn_lp, new_icnn_lp, box)
 
     # define the icnn model
     new_icnn_lp = copy(new_icnn_lp)
-    set_optimizer(new_icnn_lp, alpine_optimiser)
+    set_optimizer(new_icnn_lp, Gurobi.Optimizer)
+    set_silent(new_icnn_lp)
 
     # define the output variable
     new_icnn_output_var = new_icnn_lp[:z]
@@ -45,7 +46,7 @@ function _add_envelope_constraints(icnn_lp, new_icnn_lp, box)
     # Consitrait 4: sum(ai) = 1
     @constraint(new_icnn_lp, constraint_4, sum(a) == 1)
 
-    print(new_icnn_lp)
+    # print(new_icnn_lp)
 
     return new_icnn_lp
 end
