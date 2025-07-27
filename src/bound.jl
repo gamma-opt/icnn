@@ -132,6 +132,8 @@ function process_results(results::Vector{Any}, tree_status::TreeStatus)
                     # TODO variable slection
                     #      - current_dimension could be changed based on some logic
                     #      - for nodes stemmed from the same box, they should be branched on the same dimension 
+                    #      - a trivial approach: cycles through dimensions
+                    current_dimension = current_dimension < current_box.n ? current_dimension + 1 : 1
                     push!(bounds_to_branch, (current_box, current_dimension))
                     println("...Further branching on box $current_box with dimension $current_dimension is required")
                 
