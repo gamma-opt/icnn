@@ -4,10 +4,10 @@ mutable struct NodeOptResult
     model_index::Int
     model_status::MOI.TerminationStatusCode
     obj_optimal::Float64
-    x_optimal::Union{Vector{Float64}, Nothing}
-    z_optimal::Float64
-    a_values::Union{Vector{Float64}, Nothing}  # Optional, can be removed if not needed
-    icnn_z_optimal::Float64
+    x_optimal::Union{Vector{Float64}, Vector{Vector{Float64}}, Nothing}
+    z_optimal::Union{Float64, Vector{Float64}}
+    a_values::Any  # Optional, can be removed if not needed
+    icnn_z_optimal::Union{Float64, Vector{Float64}}
     gap::Float64
     is_feasible::Bool
     is_pruned::Bool
@@ -102,7 +102,86 @@ function solve_node_models(model_list, icnn_lp; gap_tol = 0.01)
     
 end
 
-function process_results(results::Vector{Any}, tree_status::TreeStatus)   
+function solve_node_models_multi(model_list, icnn_lp_list; gap_tol = 0.01)
+
+    results = []
+
+    for i in eachindex(model_list)
+        model = model_list[i]
+        set_silent(model)
+        println("\n----- Optimising Model $i -----")
+
+        optimize!(model)
+        
+        println("Status: ", termination_status(model))
+        
+        if termination_status(model) == MOI.OPTIMAL
+            obj_optimal = objective_value(model)
+            x_optimal = [value.(x_group) for x_group in model[:x]]
+            z_optimal = value.(model[:z])
+            if haskey(model, :a)
+                # If 'a' is present, extract its values
+                a_values = value.(model[:a])
+            else
+                # If 'a' is not present, set it to nothing or an empty vector
+                a_values = nothing
+            end
+            icnn_z_optimal = [forwardpass(icnn_lp_list[i], x) for (i, x) in enumerate(x_optimal)]
+            # Compute the relative gap for each dimension and take the maximum as the overall gap
+            gap = maximum(abs.(z_optimal .- icnn_z_optimal) ./ (abs.(icnn_z_optimal) .+ eps()))
+            is_feasible = true
+            if gap > gap_tol
+                is_feasible = false
+                println("Warning: Gap between z_optimal and icnn_z_optimal is greater than $gap_tol, the envelope relaxation needs to be tightened")
+            end
+            is_pruned = false  # Default pruning status, can be updated later
+                        
+            # Store all data needed
+            push!(results, NodeOptResult(
+                i,
+                termination_status(model),
+                obj_optimal,
+                x_optimal,
+                z_optimal,
+                a_values,
+                icnn_z_optimal,
+                gap,
+                is_feasible,
+                is_pruned
+            ))
+            
+            println("Objective value: ", obj_optimal)
+            println("        x value: ", x_optimal)
+            println("        z value: ", z_optimal)
+            println("  icnn(x) value: ", icnn_z_optimal)
+            # println("a values:")
+            # for j in eachindex(a_values)
+                # println("  a[$j] = ", a_values[j])
+            # end
+            println("           Gap: ", gap)
+        else
+            push!(results, NodeOptResult(
+                i,
+                termination_status(model),
+                NaN,
+                nothing,
+                NaN,
+                nothing,
+                NaN,
+                NaN,
+                false,
+                true  # prune by infeasibility
+            ))
+            println("Optimisation did not reach optimality")
+        end
+    end
+
+    return results
+    
+end
+
+function process_results(results::Vector{Any}, tree_status::TreeStatus)
+     
     box_tuples = tree_status.bounds_to_branch
     obj_lb = tree_status.obj_lb
     x_optimal = tree_status.x_optimal
@@ -131,7 +210,9 @@ function process_results(results::Vector{Any}, tree_status::TreeStatus)
                 else
                     # TODO variable slection
                     #      - current_dimension could be changed based on some logic
-                    #      - for nodes stemmed from the same box, they should be branched on the same dimension 
+                    #      - for nodes stemmed from the same box, they should be branched on the same dimension
+                    #      - a trivial approach: cycles through dimensions
+                    current_dimension = current_dimension < current_box.n ? current_dimension + 1 : 1
                     push!(bounds_to_branch, (current_box, current_dimension))
                     println("...Further branching on box $current_box with dimension $current_dimension is required")
                 
