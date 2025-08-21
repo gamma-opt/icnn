@@ -85,7 +85,7 @@ function branch_and_bound(icnn_lp, root_icnn_lp, tree_status::TreeStatus)
             solve_node_models(new_icnn_lp_list, icnn_lp)
         
         # Process the results and update the tree status
-        tree_status = process_results(results, tree_status)
+        tree_status = process_results(results, tree_status)        
     end
 <<<<<<< HEAD
     
