@@ -11,12 +11,6 @@ include("../../src/util.jl")
 # replace with the path to the model_weights.json file
 file_path = joinpath(@__DIR__, "model_weights_3D.json")
 
-# Read the JSON file
-json_content = read(file_path, String)
-
-# Parse the JSON content
-parsed_json = JSON.parse(json_content)
-
 #-------------------------------------ICNN-----------------------------------------#
 
 # define the base icnn model without any additional constraints
