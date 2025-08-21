@@ -65,7 +65,13 @@ function branch_and_bound(icnn_lp, root_icnn_lp, tree_status::TreeStatus)
     start_time = time()
     # Process the tree status to branch on boxes
     while !tree_status.all_pruned
+<<<<<<< HEAD
         iteration += 1
+=======
+        # Increment and print iteration counter and current tree level
+        iteration += 1
+
+>>>>>>> multi_surrogate
         # Branch on the next box
         tree_status.bounds_to_branch = branch_box(tree_status.bounds_to_branch)
         
@@ -73,11 +79,18 @@ function branch_and_bound(icnn_lp, root_icnn_lp, tree_status::TreeStatus)
         new_icnn_lp_list = generate_relaxation(icnn_lp, root_icnn_lp, tree_status)
         
         # Solve the new models
-        results = solve_node_models(new_icnn_lp_list, icnn_lp)
+        # results = solve_node_models(new_icnn_lp_list, icnn_lp)
+        results = icnn_lp isa Vector ?
+            solve_node_models_multi(new_icnn_lp_list, icnn_lp) :
+            solve_node_models(new_icnn_lp_list, icnn_lp)
         
         # Process the results and update the tree status
         tree_status = process_results(results, tree_status)
     end
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> multi_surrogate
     println("\nTerminated at iteration #$iteration in $(round(time() - start_time, digits=4)) seconds")
 end
