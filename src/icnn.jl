@@ -29,6 +29,9 @@ struct ICNN
     dropout_layers::Vector{Union{Flux.Dropout, Nothing}}
 end
 
+# Make ICNN work with Flux
+Flux.@functor ICNN
+
 # Constructor for ICNN
 function ICNN(config::ICNNConfig)
     # Set random seed if provided
@@ -49,11 +52,7 @@ function ICNN(config::ICNNConfig)
     push!(skip_layers, nothing)  # No skip for input layer
     
     # Add dropout if specified
-    if config.dropout_rate > 0
-        push!(dropout_layers, Flux.Dropout(config.dropout_rate))
-    else
-        push!(dropout_layers, nothing)
-    end
+    push!(dropout_layers, Flux.Dropout(config.dropout_rate))
     
     # Hidden layers
     for i in 2:length(config.hidden_dims)
@@ -72,11 +71,7 @@ function ICNN(config::ICNNConfig)
         end
         
         # Dropout
-        if config.dropout_rate > 0
-            push!(dropout_layers, Flux.Dropout(config.dropout_rate))
-        else
-            push!(dropout_layers, nothing)
-        end
+        push!(dropout_layers, Flux.Dropout(config.dropout_rate))
     end
     
     # Output layer
@@ -146,14 +141,16 @@ function project_convex_weights!(model::ICNN)
 end
 
 # Training function
-function train_icnn(model::ICNN, x_train, y_train, x_val, y_val; verbose=true)
+function train_icnn(model::ICNN, x_train, y_train, x_val, y_val;
+    optimiser = Flux.Adam(model.config.learning_rate), verbose=true
+    )
     config = model.config
     
     # Loss function
     loss_fn(x, y) = Flux.mse(model(x; training=true), y)
     
     # Optimiser
-    optimiser = Flux.Adam(config.learning_rate)
+    # optimiser = Flux.Adam(config.learning_rate)
     params = Flux.params(model)
     
     # Early stopping variables
@@ -183,6 +180,7 @@ function train_icnn(model::ICNN, x_train, y_train, x_val, y_val; verbose=true)
         println()
     end
     
+    start_time = time()
     for epoch in 1:config.max_epochs
         epoch_losses = Float32[]
         
@@ -239,6 +237,9 @@ function train_icnn(model::ICNN, x_train, y_train, x_val, y_val; verbose=true)
         end
     end
     
+    # Calculate total training time
+    total_time = time() - start_time
+
     # Restore best model
     for i in 1:length(model.layers)
         model.layers[i] = best_model_state.layers[i]
@@ -247,7 +248,12 @@ function train_icnn(model::ICNN, x_train, y_train, x_val, y_val; verbose=true)
         model.skip_layers[i] = best_model_state.skip_layers[i]
     end
     
-    return Dict("train_losses" => train_losses, "val_losses" => val_losses, "best_val_loss" => best_val_loss)
+    return Dict(
+        "train_losses" => train_losses, 
+        "val_losses" => val_losses, 
+        "best_val_loss" => best_val_loss,
+        "training_time" => total_time
+    )
 end
 
 # Extract weights in Gogeta-style with named layers
