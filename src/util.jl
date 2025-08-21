@@ -1,3 +1,22 @@
+function create_nn_data_3way(x, y; train_split=0.7, val_split=0.15, test_split=0.15)
+    @assert train_split + val_split + test_split ≈ 1.0 "Splits must sum to 1.0"
+    
+    data = (x=x, y=y) 
+    
+    # First split: Separate test set
+    train_val_data, test_data = Flux.splitobs(data, at = train_split + val_split) 
+    
+    # Second split: Separate train and validation sets from the remaining data
+    adjusted_split = train_split / (train_split + val_split) 
+    train_data, val_data = Flux.splitobs(train_val_data, at = adjusted_split)
+
+    # Return named tuples for easy access, converting to Float32
+    return (
+        train = (x = Float32.(train_data.x), y = Float32.(train_data.y)),
+        val = (x = Float32.(val_data.x), y = Float32.(val_data.y)),
+        test = (x = Float32.(test_data.x), y = Float32.(test_data.y))
+    )
+end
 
 function generate_extreme_combinations(bounds_matrix)
     dimensions = size(bounds_matrix, 2)
