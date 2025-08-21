@@ -25,11 +25,11 @@ custom_config = ICNNConfig(
     relu,                   # activation
     true,                   # use_skip_connections
     true,                   # use_convex_projection
-    0.1f0,                  # learning_rate
-    512,                    # batch_size
-    200,                    # max_epochs
+    0.01f0,                 # learning_rate
+    32,                     # batch_size
+    300,                    # max_epochs
     50,                     # patience
-    0.1f0,                  # dropout_rate - add some regularisation
+    0,                      # dropout_rate - add some regularisation
     Flux.kaiming_normal,    # weight_init
     123                     # seed
 )
@@ -91,3 +91,56 @@ end
 
 ### B&B ###
 branch_and_bound(icnn_lp, root_icnn_lp, tree_status)
+
+### NN->MIP ###
+function set_solver!(jump)
+    set_optimizer(jump, () -> Gurobi.Optimizer())
+    set_silent(jump)
+end
+
+custom_config_nn = ICNNConfig(
+    5,                      # input_dim
+    [20,10],                # hidden_dims
+    1,                      # output_dim
+    relu,                   # activation
+    false,                  # use_skip_connections
+    false,                  # use_convex_projection
+    0.01f0,                 # learning_rate
+    64,                     # batch_size
+    200,                    # max_epochs
+    50,                     # patience
+    0.1f0,                  # dropout_rate - add some regularisation
+    Flux.glorot_uniform,    # weight_init
+    123                     # seed
+)
+
+model_nn = ICNN(custom_config_nn)
+training_history_nn = train_icnn(model_nn, x_train, y_train, x_val, y_val)
+
+file_path_nn = joinpath(@__DIR__, "icnn_model_nn.json")
+save_model(model_nn, file_path_nn)
+
+lb = [-1.0, -1.0, -1.0, -1.0, -1.0];
+ub = [0.0, 0.0, 0.0, 0.0, 0.0];
+
+nn_mip =  Model(Gurobi.Optimizer)
+
+nn_output_var = @variable(nn_mip, z, base_name="output_var")
+nn_input_var = @variable(nn_mip, x[1:5], base_name="input_var")
+@objective(nn_mip, Max, sum(nn_input_var[i] for i in 1:5))
+@constraint(nn_mip, nn_output_var >= 2.5)
+# @objective(nn_mip, Max, nn_output_var)
+
+start_time = time()
+NN_incorporate!(nn_mip, file_path_nn, nn_output_var, nn_input_var...; U_in=ub, L_in=lb, )
+println("\nFormulated in $(round(time() - start_time, digits=4)) seconds")
+
+start_time = time()
+optimize!(nn_mip)
+println("\nSolved in $(round(time() - start_time, digits=4)) seconds")
+println("         Status: ", termination_status(nn_mip))
+println("Objective value: ", objective_value(nn_mip))
+println("        x value: ", value.(nn_mip[:x]))
+println("        z value: ", value(nn_mip[:z]))
+x = [0.0, -0.8076734819182435, -1.0, 0.0, -1.0]
+y = sum(x.^2)
